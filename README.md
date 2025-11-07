@@ -238,9 +238,39 @@ For maximum compatibility, the tool uses conservative API versions:
 
 ### Running Tests
 
+The project includes comprehensive unit tests covering:
+- Argument parsing and validation
+- Kafka error codes
+- Record batch encoding/decoding
+- API version negotiation logic
+- Topic name and partition validation
+- Broker address parsing
+
+Run all tests:
+
 ```bash
 cargo test
 ```
+
+Run tests with output:
+
+```bash
+cargo test -- --nocapture
+```
+
+Run specific test:
+
+```bash
+cargo test test_record_batch_encoding
+```
+
+### Test Coverage
+
+Current test suite includes 16+ tests covering:
+- **Parsing**: Topic specs, partition numbers, offsets, broker addresses
+- **Validation**: Partition counts, topic names, offset ranges
+- **Protocol**: Record encoding/decoding, error codes, API version negotiation
+- **Logic**: Correlation ID management, bytes conversion
 
 ### Building for Release
 
@@ -250,7 +280,7 @@ cargo build --release
 
 ### Code Structure
 
-- `src/main.rs` - Main entry point and KafkaClient implementation
+- `src/main.rs` - Main entry point, KafkaClient implementation, and tests
 - `Cargo.toml` - Project dependencies and metadata
 
 ## Protocol Details

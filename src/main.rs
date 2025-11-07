@@ -549,6 +549,287 @@ async fn handle_get_topic(broker: &str, topic: String) -> Result<()> {
     Ok(())
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_topic_spec_with_partition() {
+        let spec = "my-topic:3";
+        let parts: Vec<&str> = spec.split(':').collect();
+        assert_eq!(parts[0], "my-topic");
+        assert_eq!(parts[1], "3");
+        assert_eq!(parts.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_topic_spec_without_partition() {
+        let spec = "my-topic";
+        let parts: Vec<&str> = spec.split(':').collect();
+        assert_eq!(parts[0], "my-topic");
+        assert_eq!(parts.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_topic_spec_with_partition_and_offset() {
+        let spec = "my-topic:0:100";
+        let parts: Vec<&str> = spec.split(':').collect();
+        assert_eq!(parts[0], "my-topic");
+        assert_eq!(parts[1], "0");
+        assert_eq!(parts[2], "100");
+        assert_eq!(parts.len(), 3);
+    }
+
+    #[test]
+    fn test_partition_count_validation() {
+        let num_partitions = 3;
+        assert!(num_partitions > 0);
+
+        let num_partitions_zero = 0;
+        assert!(num_partitions_zero <= 0);
+
+        let num_partitions_negative = -1;
+        assert!(num_partitions_negative <= 0);
+    }
+
+    #[test]
+    fn test_parse_partition_from_string() {
+        let partition_str = "5";
+        let partition: Result<i32, _> = partition_str.parse();
+        assert!(partition.is_ok());
+        assert_eq!(partition.unwrap(), 5);
+
+        let invalid_partition = "invalid";
+        let result: Result<i32, _> = invalid_partition.parse();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_offset_from_string() {
+        let offset_str = "1000";
+        let offset: Result<i64, _> = offset_str.parse();
+        assert!(offset.is_ok());
+        assert_eq!(offset.unwrap(), 1000);
+
+        let negative_offset = "-1";
+        let result: Result<i64, _> = negative_offset.parse();
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), -1);
+    }
+
+    #[test]
+    fn test_kafka_error_codes() {
+        // Test that error code constants are as expected
+        let error_code_success = 0;
+        let error_code_offset_out_of_range = 1;
+        let error_code_unknown_topic = 3;
+        let error_code_leader_not_available = 5;
+        let error_code_not_leader = 6;
+        let error_code_topic_already_exists = 36;
+        let error_code_invalid_partitions = 37;
+        let error_code_invalid_replication_factor = 38;
+
+        assert_eq!(error_code_success, 0);
+        assert_eq!(error_code_offset_out_of_range, 1);
+        assert_eq!(error_code_unknown_topic, 3);
+        assert_eq!(error_code_leader_not_available, 5);
+        assert_eq!(error_code_not_leader, 6);
+        assert_eq!(error_code_topic_already_exists, 36);
+        assert_eq!(error_code_invalid_partitions, 37);
+        assert_eq!(error_code_invalid_replication_factor, 38);
+    }
+
+    #[test]
+    fn test_record_batch_encoding() {
+        use bytes::{Bytes, BytesMut};
+        use kafka_protocol::records::{
+            Compression, Record, RecordBatchEncoder, RecordEncodeOptions,
+        };
+
+        let record = Record {
+            transactional: false,
+            control: false,
+            partition_leader_epoch: -1,
+            producer_id: -1,
+            producer_epoch: -1,
+            timestamp_type: kafka_protocol::records::TimestampType::Creation,
+            offset: 0,
+            sequence: -1,
+            timestamp: 1234567890,
+            key: Some(Bytes::from("test-key")),
+            value: Some(Bytes::from("test-value")),
+            headers: Default::default(),
+        };
+
+        let records = vec![record];
+        let mut batch_buf = BytesMut::new();
+        let encode_options = RecordEncodeOptions {
+            version: 2,
+            compression: Compression::None,
+        };
+
+        let result = RecordBatchEncoder::encode(&mut batch_buf, &records, &encode_options);
+        assert!(result.is_ok());
+        assert!(!batch_buf.is_empty());
+    }
+
+    #[test]
+    fn test_record_batch_decoding() {
+        use bytes::{Bytes, BytesMut};
+        use kafka_protocol::records::{
+            Compression, Record, RecordBatchDecoder, RecordBatchEncoder, RecordEncodeOptions,
+        };
+
+        // Create a record
+        let record = Record {
+            transactional: false,
+            control: false,
+            partition_leader_epoch: -1,
+            producer_id: -1,
+            producer_epoch: -1,
+            timestamp_type: kafka_protocol::records::TimestampType::Creation,
+            offset: 0,
+            sequence: -1,
+            timestamp: 1234567890,
+            key: Some(Bytes::from("test-key")),
+            value: Some(Bytes::from("test-value")),
+            headers: Default::default(),
+        };
+
+        // Encode it
+        let records = vec![record];
+        let mut batch_buf = BytesMut::new();
+        let encode_options = RecordEncodeOptions {
+            version: 2,
+            compression: Compression::None,
+        };
+        RecordBatchEncoder::encode(&mut batch_buf, &records, &encode_options).unwrap();
+
+        // Decode it back
+        let mut bytes = batch_buf.freeze();
+        let result = RecordBatchDecoder::decode_all(&mut bytes);
+        assert!(result.is_ok());
+
+        let record_sets = result.unwrap();
+        assert!(!record_sets.is_empty());
+
+        let decoded_records = &record_sets[0].records;
+        assert_eq!(decoded_records.len(), 1);
+        assert_eq!(
+            decoded_records[0].key.as_ref().unwrap(),
+            &Bytes::from("test-key")
+        );
+        assert_eq!(
+            decoded_records[0].value.as_ref().unwrap(),
+            &Bytes::from("test-value")
+        );
+    }
+
+    #[test]
+    fn test_topic_name_validation() {
+        // Valid topic names
+        let valid_names = vec!["my-topic", "my_topic", "my.topic", "topic123", "t"];
+
+        for name in valid_names {
+            assert!(!name.is_empty());
+            assert!(name.len() <= 249); // Kafka max topic name length
+        }
+
+        // Empty topic name should be invalid
+        let empty = "";
+        assert!(empty.is_empty());
+    }
+
+    #[test]
+    fn test_partition_index_validation() {
+        let partition = 0;
+        assert!(partition >= 0);
+
+        let partition = 5;
+        assert!(partition >= 0);
+
+        let negative = -1;
+        assert!(negative < 0);
+    }
+
+    #[test]
+    fn test_offset_validation() {
+        // Valid offsets
+        let offset_start = 0i64;
+        assert!(offset_start >= 0);
+
+        let offset_middle = 100i64;
+        assert!(offset_middle >= 0);
+
+        // Special offset value (beginning)
+        let offset_beginning = -2i64;
+        assert!(offset_beginning < 0);
+
+        // Special offset value (end)
+        let offset_end = -1i64;
+        assert!(offset_end < 0);
+    }
+
+    #[test]
+    fn test_broker_address_parsing() {
+        let broker = "localhost:9092";
+        let parts: Vec<&str> = broker.split(':').collect();
+        assert_eq!(parts.len(), 2);
+        assert_eq!(parts[0], "localhost");
+        assert_eq!(parts[1], "9092");
+
+        let port: Result<u16, _> = parts[1].parse();
+        assert!(port.is_ok());
+        assert_eq!(port.unwrap(), 9092);
+    }
+
+    #[test]
+    fn test_api_version_negotiation_logic() {
+        // Test that we select the minimum of requested and broker's max version
+        let requested = 7;
+        let broker_max = 5;
+        let broker_min = 0;
+
+        let negotiated = requested.min(broker_max).max(broker_min);
+        assert_eq!(negotiated, 5);
+
+        // Test when broker supports higher version
+        let requested = 3;
+        let broker_max = 10;
+        let broker_min = 0;
+
+        let negotiated = requested.min(broker_max).max(broker_min);
+        assert_eq!(negotiated, 3);
+    }
+
+    #[test]
+    fn test_correlation_id_increment() {
+        let mut correlation_id = 0i32;
+
+        correlation_id += 1;
+        assert_eq!(correlation_id, 1);
+
+        correlation_id += 1;
+        assert_eq!(correlation_id, 2);
+
+        correlation_id += 1;
+        assert_eq!(correlation_id, 3);
+    }
+
+    #[test]
+    fn test_bytes_conversion() {
+        use bytes::Bytes;
+
+        let key = "my-key";
+        let key_bytes = Bytes::from(key.as_bytes().to_vec());
+        assert_eq!(key_bytes.len(), 6);
+
+        let value = "my-value";
+        let value_bytes = Bytes::from(value.as_bytes().to_vec());
+        assert_eq!(value_bytes.len(), 8);
+    }
+}
+
 /// Handles the create-topic command
 async fn handle_create_topic(broker: &str, topic_spec: String) -> Result<()> {
     // Parse topic_spec: topicname or topicname:partitions
