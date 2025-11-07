@@ -1,0 +1,23 @@
+[package]
+name = "kc"
+version = "0.1.0"
+edition = "2021"
+description = "A Kafka client CLI tool for debugging and inspecting Kafka clusters"
+authors = ["Cleafy S.p.A."]
+license = "Apache-2.0"
+
+# Empty workspace to make this a standalone crate (not part of parent workspace)
+[workspace]
+
+[[bin]]
+name = "kc"
+path = "src/main.rs"
+
+[dependencies]
+kafka-protocol = { version = "0.15.1", features = ["messages_enums", "client"] }
+tokio = { version = "1", features = ["full", "io-util"] }
+clap = { version = "4", features = ["derive"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+bytes = "1.4"
+anyhow = "1.0"
