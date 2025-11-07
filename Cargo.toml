@@ -1,5 +1,5 @@
 [package]
-name = "kc"
+name = "kcli"
 version = "0.1.0"
 edition = "2021"
 description = "A Kafka client CLI tool for debugging and inspecting Kafka clusters"
