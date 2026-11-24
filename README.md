@@ -1,5 +1,7 @@
 # kc - Kafka CLI Tool
 
+[![GitHub stars](https://img.shields.io/github/stars/aovestdipaperino/kc?logo=github&color=brightgreen)](https://github.com/aovestdipaperino/kc/stargazers)
+
 A lightweight command-line tool for debugging and managing Kafka clusters using the native Kafka protocol.
 
 ## Features
